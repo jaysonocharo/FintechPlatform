@@ -1,0 +1,23 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Source code
+*.cs text diff=csharp
+*.csproj text
+*.sln text eol=crlf
+
+# Documentation & Config
+*.md text
+*.json text
+*.yml text
+*.yaml text
+*.xml text
+.gitattributes text
+.gitignore text
+
+# Binary files
+*.dll binary
+*.exe binary
+*.png binary
+*.jpg binary
+*.ico binary
