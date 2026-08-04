@@ -1,15 +1,24 @@
 using Microsoft.EntityFrameworkCore;
 using FintechBackend.Data;
 using FintechBackend.Services;
+using FluentValidation;
+using FintechBackend.Exceptions;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.SuppressModelStateInvalidFilter = true; // Suppress default ModelState response so GlobalExceptionHandler handles it
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<ITokenService, TokenService>(); // Register TokenService
+builder.Services.AddValidatorsFromAssemblyContaining<Program>(); // Register FluentValidation validators
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>(); // Register Global Exception Handling services
+builder.Services.AddProblemDetails();
 
 // Configure Strict Production-Grade CORS
 builder.Services.AddCors(options =>
@@ -60,9 +69,9 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+app.UseExceptionHandler();
 app.UseCors("FintechCorsPolicy");
-
-// app.UseHttpsRedirection();
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

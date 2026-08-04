@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using FintechBackend.Constants; // Required for Roles.Admin
 using FintechBackend.Extensions; // Required for User.GetUserId()
 using FintechBackend.DTOs;
+using FluentValidation;
 
 namespace FintechBackend.Controllers;
 
@@ -15,11 +16,13 @@ namespace FintechBackend.Controllers;
 public class TransactionsController : ControllerBase
 {
     private readonly AppDbContext _context;
+    private readonly IValidator<CreateTransactionDto> _validator;
 
     // Injecting the DbContext into the controller via the constructor
-    public TransactionsController(AppDbContext context)
+    public TransactionsController(AppDbContext context, IValidator<CreateTransactionDto> validator)
     {
         _context = context;
+        _validator = validator;
     }
 
 // 1. READ ALL: GET api/transactions
