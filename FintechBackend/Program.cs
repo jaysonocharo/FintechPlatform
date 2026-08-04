@@ -42,6 +42,24 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+// --- Initialization & Seeding ---
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<AppDbContext>();
+        var configuration = services.GetRequiredService<IConfiguration>();
+        
+        DbInitializer.Initialize(context, configuration);
+    }
+    catch (Exception ex)
+    {
+        // In a production app, you would log this to Application Insights or Serilog
+        Console.WriteLine($"An error occurred while seeding the database: {ex.Message}");
+    }
+}
+
 app.UseCors("FintechCorsPolicy");
 
 // app.UseHttpsRedirection();

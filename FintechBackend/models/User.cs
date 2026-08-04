@@ -1,3 +1,5 @@
+using FintechBackend.Constants;
+
 namespace FintechBackend.Models
 {
     public class User
@@ -7,7 +9,7 @@ namespace FintechBackend.Models
         public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
         public string PasswordHash { get; set; } = string.Empty;
-        public string Role { get; set; } = "User"; // e.g., "User", "Admin"
+        public string Role { get; set; } = Roles.User; // e.g., "User", "Admin"
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation property: One user has many transactions

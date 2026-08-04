@@ -5,12 +5,23 @@ using FintechBackend.Models;
 using FintechBackend.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+<<<<<<< Updated upstream
+=======
+using Microsoft.AspNetCore.Authorization; // Provides the [Authorize] attribute.
+using System.Security.Claims; // Provides ClaimTypes.NameIdentifier and ClaimTypes.Email constants.
+using FintechBackend.Constants;
+using FintechBackend.Extensions;
+>>>>>>> Stashed changes
 
 
 namespace FintechBackend.Controllers
 {
     [ApiController]
+<<<<<<< Updated upstream
     [Route("api/[controller]")]
+=======
+    [Route("api/[controller]")] // dynamically swaps the [controller] token with the name of your class, minus the word "Controller". eg a class named AuthController, Swagger reads this literally as Auth.
+>>>>>>> Stashed changes
     public class AuthController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -38,7 +49,8 @@ namespace FintechBackend.Controllers
             var user = new User
             {
                 Email = dto.Email.ToLower(),
-                PasswordHash = passwordHash
+                PasswordHash = passwordHash,
+                Role = Roles.User
             };
 
             _context.Users.Add(user);
@@ -67,8 +79,38 @@ namespace FintechBackend.Controllers
             }
 
             // 3. Generate token
+<<<<<<< Updated upstream
             var token = _tokenService.CreateToken(user);
             return Ok(new AuthResponseDto { Token = token, Email = user.Email });
+=======
+            var token = _tokenService.CreateToken(user!);
+            return Ok(new AuthResponseDto { Token = token, Email = user!.Email });
         }
+
+        // Security Test Endpoint: Requires a valid JWT token in the Authorization header
+        [HttpGet("me")]
+        [Authorize]
+        public IActionResult GetCurrentUser()
+        {
+            // Extract claims embedded inside the JWT token
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var email = User.FindFirstValue(ClaimTypes.Email);
+
+            return Ok(new
+            {
+                Message = "You accessed a protected route successfully!",
+                UserId = userId,
+                Email = email
+            });
+>>>>>>> Stashed changes
+        }
+
+        [HttpGet("admin-only")]
+        [Authorize(Roles = Roles.Admin)] // This tells .NET to check the JWT for the Admin role claim
+        public IActionResult AdminOnlyEndpoint()
+        {
+            return Ok(new { Message = "Success! You are authenticated as an Admin." });
+        }
+
     }
 }
