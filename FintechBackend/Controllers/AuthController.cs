@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.Authorization; // Provides the [Authorize] attribute.
 using System.Security.Claims; // Provides ClaimTypes.NameIdentifier and ClaimTypes.Email constants.
 using FintechBackend.Constants;
 using FintechBackend.Extensions;
+using FluentValidation;
+using Ganss.Xss;
 
 
 namespace FintechBackend.Controllers
@@ -19,16 +21,27 @@ namespace FintechBackend.Controllers
     {
         private readonly AppDbContext _context;
         private readonly ITokenService _tokenService;
+        private readonly IValidator<RegisterDto> _registerValidator;
+        private readonly IValidator<LoginDto> _loginValidator;
 
-        public AuthController(AppDbContext context, ITokenService tokenService)
+        //Injects them into the constructor
+        public AuthController(
+            AppDbContext context, 
+            ITokenService tokenService,
+            IValidator<RegisterDto> registerValidator,
+            IValidator<LoginDto> loginValidator)
         {
             _context = context;
             _tokenService = tokenService;
+            _registerValidator = registerValidator;
+            _loginValidator = loginValidator;
         }
 
         [HttpPost("register")]
         public async Task<ActionResult<AuthResponseDto>> Register(RegisterDto dto)
         {
+            // Validate the payload immediately
+            await _registerValidator.ValidateAndThrowAsync(dto);
             // 1. Check if user already exists
             if (await _context.Users.AnyAsync(u => u.Email.ToLower() == dto.Email.ToLower()))
             {
@@ -57,6 +70,8 @@ namespace FintechBackend.Controllers
         [HttpPost("login")]
         public async Task<ActionResult<AuthResponseDto>> Login(LoginDto dto)
         {
+            // Validate the payload immediately
+            await _loginValidator.ValidateAndThrowAsync(dto);
             // 1. Find user by email
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == dto.Email.ToLower());
             if (user == null)

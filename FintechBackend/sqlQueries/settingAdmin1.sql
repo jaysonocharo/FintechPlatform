@@ -4,4 +4,4 @@ SELECT * FROM Users;
 -- WHERE Email = 'user3@example.com';
 
 -- DELETE FROM Users 
--- WHERE Email = 'user3@example.com';
+-- WHERE Email = 'user1@example.com';

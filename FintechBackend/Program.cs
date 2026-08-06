@@ -3,6 +3,9 @@ using FintechBackend.Data;
 using FintechBackend.Services;
 using FluentValidation;
 using FintechBackend.Exceptions;
+using FintechBackend.Validators;
+using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,9 +17,59 @@ builder.Services.AddControllers()
         options.SuppressModelStateInvalidFilter = true; // Suppress default ModelState response so GlobalExceptionHandler handles it
     });
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement()
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                },
+                Scheme = "oauth2",
+                Name = "Bearer",
+                In = ParameterLocation.Header,
+            },
+            new List<string>()
+        }
+    });
+});
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = builder.Configuration["JwtSettings:Issuer"], // Updated
+        ValidAudience = builder.Configuration["JwtSettings:Audience"], // Updated
+        IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
+            System.Text.Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:Secret"]!)) // Updated
+    };
+});
+
 builder.Services.AddScoped<ITokenService, TokenService>(); // Register TokenService
-builder.Services.AddValidatorsFromAssemblyContaining<Program>(); // Register FluentValidation validators
+builder.Services.AddValidatorsFromAssemblyContaining<CreateTransactionDtoValidator>();// Register FluentValidation validators
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>(); // Register Global Exception Handling services
 builder.Services.AddProblemDetails();
 
@@ -70,6 +123,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseExceptionHandler();
+app.UseRouting();
 app.UseCors("FintechCorsPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
