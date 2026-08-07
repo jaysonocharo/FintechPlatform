@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace FintechBackend.Migrations
 {
     /// <inheritdoc />
-    public partial class AddUserAuthentication : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -17,6 +17,8 @@ namespace FintechBackend.Migrations
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Email = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    FirstName = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    LastName = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     PasswordHash = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Role = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
@@ -32,6 +34,7 @@ namespace FintechBackend.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
+                    IdempotencyKey = table.Column<string>(type: "nvarchar(450)", nullable: false),
                     AccountHolder = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Amount = table.Column<long>(type: "bigint", nullable: false),
                     TransactionType = table.Column<string>(type: "nvarchar(max)", nullable: false),
@@ -48,6 +51,12 @@ namespace FintechBackend.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Transactions_IdempotencyKey",
+                table: "Transactions",
+                column: "IdempotencyKey",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Transactions_UserId",
