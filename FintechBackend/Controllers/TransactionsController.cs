@@ -99,8 +99,13 @@ public class TransactionsController : ControllerBase
 
     // 3. CREATE: POST api/transactions
     [HttpPost]
-    public async Task<ActionResult<Transaction>> CreateTransaction(CreateTransactionDto dto)
+    public async Task<ActionResult<TransactionResponseDto>> CreateTransaction(CreateTransactionDto dto)
     {
+        // Prevent Null Model crash
+        if (dto == null)
+        {
+            return BadRequest(new { error = "Request body cannot be empty." });
+        }
         // 1. Explicitly validate the incoming payload.
         // If validation fails, this line throws FluentValidation.ValidationException immediately.
         await _validator.ValidateAndThrowAsync(dto);
@@ -110,6 +115,36 @@ public class TransactionsController : ControllerBase
         var currentUserId = User.GetUserId();
         if (string.IsNullOrEmpty(currentUserId)) return Unauthorized("User ID claim is missing from token or corrupted.");
 
+        // --- IDEMPOTENCY CHECK START ---
+        // Extract and enforce the Idempotency Key from the HTTP Headers
+        if (!Request.Headers.TryGetValue("X-Idempotency-Key", out var idempotencyKeyHeader))
+        {
+            return BadRequest(new { error = "The 'X-Idempotency-Key' header is required for POST transactions." });
+        }
+        string idempotencyKey = idempotencyKeyHeader.ToString();
+
+        // Check if a transaction with this exact key already exists in the DB
+        // Query using AsNoTracking() and project specific properties to avoid conversion/decryption overhead on existing checks
+        var existingTransaction = await _context.Transactions
+            .AsNoTracking()
+            .Where(t => t.IdempotencyKey == idempotencyKey)
+            .Select(t => new TransactionResponseDto
+            {
+                Id = t.Id,
+                AccountHolder = t.AccountHolder,
+                Amount = t.Amount,
+                TransactionType = t.TransactionType,
+                CreatedAt = t.CreatedAt,
+                UserId = t.UserId
+            })
+            .FirstOrDefaultAsync();
+
+        if (existingTransaction != null)
+        {
+            return Ok(existingTransaction); 
+        }
+        // --- IDEMPOTENCY CHECK END ---
+
         var sanitizer = new HtmlSanitizer();
         var safeAccountHolder = sanitizer.Sanitize(dto.AccountHolder);
         var transaction = new Transaction
@@ -118,7 +153,8 @@ public class TransactionsController : ControllerBase
             Amount = dto.Amount,
             TransactionType = dto.TransactionType,
             UserId = Guid.Parse(currentUserId),
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            IdempotencyKey = idempotencyKey
         };
 
         _context.Transactions.Add(transaction);
