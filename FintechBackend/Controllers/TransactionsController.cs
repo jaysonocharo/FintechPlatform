@@ -9,11 +9,13 @@ using FintechBackend.DTOs;
 using FluentValidation;
 using System.ComponentModel.DataAnnotations;
 using Ganss.Xss;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace FintechBackend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")] // Means the route will be /api/transactions
+[EnableRateLimiting("GeneralPolicy")] // Enforces 60 req/min
 [Authorize]
 public class TransactionsController : ControllerBase
 {
