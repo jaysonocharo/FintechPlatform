@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddDataProtection();
 builder.Services.AddControllers()
@@ -74,6 +74,17 @@ builder.Services.AddValidatorsFromAssemblyContaining<CreateTransactionDtoValidat
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>(); // Register Global Exception Handling services
 builder.Services.AddProblemDetails();
 
+// 1. Configure HSTS for non-development environments
+if (!builder.Environment.IsDevelopment())
+{
+    builder.Services.AddHsts(options =>
+    {
+        options.Preload = true;
+        options.IncludeSubDomains = true;
+        options.MaxAge = TimeSpan.FromDays(365); // Force HTTPS for 1 year
+    });
+}
+
 // Configure Strict Production-Grade CORS
 builder.Services.AddCors(options =>
 {
@@ -85,7 +96,7 @@ builder.Services.AddCors(options =>
                 // Add production React domain here later, e.g. "https://app.fintechkenya.co.ke"
               )
               .WithMethods("GET", "POST", "PUT", "DELETE") // Only the CRUD verbs needed
-              .WithHeaders("Content-Type", "Authorization"); // Allows the standard, safe payload headers only
+              .WithHeaders("Content-Type", "Authorization", "X-Idempotency-Key"); // Allows the standard, safe payload headers only
     });
 });
 
@@ -102,6 +113,11 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         })
         );
 
+builder.Services.AddHttpsRedirection(options =>
+{
+    options.HttpsPort = 7272; // Sets the HTTPS redirect port explicitly
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -114,6 +130,23 @@ if (app.Environment.IsDevelopment())
         c.RoutePrefix = "swagger"; // Serves Swagger at /swagger
     });
 }
+else
+{
+    app.UseHsts();
+}
+
+// Enforce HTTPS redirection
+app.UseHttpsRedirection();
+
+// 3. Security Headers Middleware
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.Append("X-Frame-Options", "DENY");
+    context.Response.Headers.Append("Referrer-Policy", "no-referrer");
+    context.Response.Headers.Append("X-XSS-Protection", "0");
+    await next();
+});
 
 // --- Initialization & Seeding ---
 using (var scope = app.Services.CreateScope())
