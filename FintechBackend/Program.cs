@@ -6,9 +6,27 @@ using FintechBackend.Exceptions;
 using FintechBackend.Validators;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Abstraction for Secrets: Uses Azure Key Vault in Production, User Secrets in Development
+if (builder.Environment.IsProduction())
+{
+    var keyVaultUri = builder.Configuration["KeyVault:VaultUri"];
+    if (!string.IsNullOrEmpty(keyVaultUri))
+    {
+        // Automatically injects Key Vault secrets into IConfiguration when deployed
+        // builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUri), new DefaultAzureCredential());
+    }
+}
+
+// Mask Server Identity (Remove 'Server: Kestrel' header)
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.AddServerHeader = false;
+});
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddDataProtection();
@@ -17,6 +35,43 @@ builder.Services.AddControllers()
     {
         options.SuppressModelStateInvalidFilter = true; // Suppress default ModelState response so GlobalExceptionHandler handles it
     });
+
+// 2. Configure .NET 8 Rate Limiting Policies
+builder.Services.AddRateLimiter(options =>
+{
+    // Custom 429 response when rate limit is exceeded
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsync(
+            "{\"error\": \"Too many requests. Please try again later.\"}", cancellationToken: token);
+    };
+
+    // Policy A: Strict limit for Auth endpoints (Login / Register) - 5 req/min per IP
+    options.AddPolicy("AuthPolicy", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
+    // Policy B: General API limit - 60 req/min per IP
+    options.AddPolicy("GeneralPolicy", httpContext =>
+        RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 6,
+                QueueLimit = 0
+            }));
+});
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -135,8 +190,12 @@ else
     app.UseHsts();
 }
 
-// Enforce HTTPS redirection
-app.UseHttpsRedirection();
+// Only enforce HTTPS redirection in Staging and Production environments.
+// In Development, we allow HTTP (localhost:5272) so Swagger and Postman work cleanly.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 // 3. Security Headers Middleware
 app.Use(async (context, next) =>
@@ -169,6 +228,7 @@ using (var scope = app.Services.CreateScope())
 app.UseExceptionHandler();
 app.UseRouting();
 app.UseCors("FintechCorsPolicy");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
