@@ -11,12 +11,14 @@ using FintechBackend.Constants;
 using FintechBackend.Extensions;
 using FluentValidation;
 using Ganss.Xss;
+using Microsoft.AspNetCore.RateLimiting;
 
 
 namespace FintechBackend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")] // dynamically swaps the [controller] token with the name of your class, minus the word "Controller". eg a class named AuthController, Swagger reads this literally as Auth.
+    [EnableRateLimiting("AuthPolicy")]// Enforces 5 req/min
     public class AuthController : ControllerBase
     {
         private readonly AppDbContext _context;
