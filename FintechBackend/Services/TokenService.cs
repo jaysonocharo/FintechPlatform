@@ -31,7 +31,8 @@ public class TokenService : ITokenService
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Email, user.Email),
             new Claim(ClaimTypes.GivenName, user.FirstName ?? string.Empty),
-            new Claim(ClaimTypes.Surname, user.LastName ?? string.Empty)
+            new Claim(ClaimTypes.Surname, user.LastName ?? string.Empty),
+            new Claim(ClaimTypes.Role, user.Role)
         };
 
         // 2. Define Signing Credentials using HMAC SHA-512

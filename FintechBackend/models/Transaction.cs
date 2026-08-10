@@ -3,6 +3,8 @@ namespace FintechBackend.Models;
 public class Transaction
 {
     public int Id {get; set; } 
+    // Inside Transaction.cs
+    public string IdempotencyKey { get; set; } = string.Empty;
     public string AccountHolder { get; set; } = string.Empty;
     public long Amount { get; set;}
     public string TransactionType { get; set; } = string.Empty;
@@ -10,7 +12,7 @@ public class Transaction
 
     // Foreign Key to User
     public Guid UserId { get; set; }
-    public User? User { get; set; } // Is this safe really?(Won't it also expose the password)
+    public User? User { get; set; } 
 }
 
 /*
