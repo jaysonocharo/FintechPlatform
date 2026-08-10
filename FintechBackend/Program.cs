@@ -113,6 +113,11 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         })
         );
 
+builder.Services.AddHttpsRedirection(options =>
+{
+    options.HttpsPort = 7272; // Sets the HTTPS redirect port explicitly
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
