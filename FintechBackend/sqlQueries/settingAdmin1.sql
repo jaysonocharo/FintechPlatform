@@ -1,5 +1,6 @@
 -- SELECT * FROM Users;
-SELECT * FROM Transactions;
+-- SELECT * FROM Transactions;
+SELECT TOP 5 * FROM AuditLogs ORDER BY TimestampUtc DESC;
 -- UPDATE Users 
 -- SET Role = 'Admin' 
 -- WHERE Email = 'user3@example.com';
