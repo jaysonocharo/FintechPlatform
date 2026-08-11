@@ -15,6 +15,20 @@ public class AppDbContext: DbContext
 
     public DbSet<Transaction> Transactions{ get; set; }
     public DbSet<User> Users { get; set; }
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        var entries = ChangeTracker.Entries<AuditLog>()
+            .Where(e => e.State == EntityState.Modified || e.State == EntityState.Deleted);
+
+        if (entries.Any())
+        {
+            throw new InvalidOperationException("Audit logs are immutable and cannot be updated or deleted.");
+        }
+
+        return base.SaveChangesAsync(cancellationToken);
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
