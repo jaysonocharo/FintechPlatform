@@ -10,6 +10,7 @@ using FluentValidation;
 using System.ComponentModel.DataAnnotations;
 using Ganss.Xss;
 using Microsoft.AspNetCore.RateLimiting;
+using Serilog;
 
 namespace FintechBackend.Controllers;
 
@@ -117,6 +118,9 @@ public class TransactionsController : ControllerBase
         var currentUserId = User.GetUserId();
         if (string.IsNullOrEmpty(currentUserId)) return Unauthorized("User ID claim is missing from token or corrupted.");
 
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+        var userAgent = Request.Headers["User-Agent"].ToString();
+
         // --- IDEMPOTENCY CHECK START ---
         // Extract and enforce the Idempotency Key from the HTTP Headers
         if (!Request.Headers.TryGetValue("X-Idempotency-Key", out var idempotencyKeyHeader))
@@ -160,7 +164,22 @@ public class TransactionsController : ControllerBase
         };
 
         _context.Transactions.Add(transaction);
+        // Record persistent audit trail entry
+        _context.AuditLogs.Add(new AuditLog
+        {
+            UserId = currentUserId,
+            Action = "TRANSACTION_CREATED",
+            EntityName = "Transaction",
+            IpAddress = ipAddress,
+            UserAgent = userAgent,
+            TimestampUtc = DateTime.UtcNow
+        });
+
         await _context.SaveChangesAsync();
+
+        // Update the AuditLog EntityId once the transaction auto-generates its database ID
+        Log.Information("FINANCIAL EVENT: Transaction {TransactionId} of amount {Amount} created by User {UserId} from IP {IpAddress}", 
+            transaction.Id, transaction.Amount, currentUserId, ipAddress);
 
         var response = new TransactionResponseDto
         {
