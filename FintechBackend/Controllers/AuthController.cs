@@ -12,6 +12,7 @@ using FintechBackend.Extensions;
 using FluentValidation;
 using Ganss.Xss;
 using Microsoft.AspNetCore.RateLimiting;
+using Serilog;
 
 
 namespace FintechBackend.Controllers
@@ -74,19 +75,44 @@ namespace FintechBackend.Controllers
         {
             // Validate the payload immediately
             await _loginValidator.ValidateAndThrowAsync(dto);
+
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+            var userAgent = Request.Headers["User-Agent"].ToString();
+
             // 1. Find user by email
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == dto.Email.ToLower());
-            if (user == null)
+            if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
             {
-                return Unauthorized("Invalid credentials.");
-            }
+                // Never log dto.Password in Serilog
+                Log.Warning("SECURITY EVENT: Failed login attempt for email {Email} from IP {IpAddress}", dto.Email, ipAddress);
 
-            // 2. Verify hashed password
-            bool isValidPassword = BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash);
-            if (!isValidPassword)
-            {
+                _context.AuditLogs.Add(new AuditLog
+                {
+                    UserId = user?.Id.ToString(),
+                    Action = "USER_LOGIN_FAILED",
+                    EntityName = "User",
+                    IpAddress = ipAddress,
+                    UserAgent = userAgent,
+                    TimestampUtc = DateTime.UtcNow
+                });
+                await _context.SaveChangesAsync();
+
                 return Unauthorized("Invalid credentials.");
             }
+            
+            Log.Information("SECURITY EVENT: Successful login for User ID {UserId} from IP {IpAddress}", user.Id, ipAddress);
+
+            _context.AuditLogs.Add(new AuditLog
+            {
+                UserId = user.Id.ToString(),
+                Action = "USER_LOGIN_SUCCESSFUL",
+                EntityName = "User",
+                EntityId = user.Id.ToString(),
+                IpAddress = ipAddress,
+                UserAgent = userAgent,
+                TimestampUtc = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
 
             // 3. Generate token
             var token = _tokenService.CreateToken(user!);
