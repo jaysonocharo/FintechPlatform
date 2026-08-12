@@ -1,0 +1,17 @@
+[*.cs]
+# Enable all .NET code quality and security rules
+dotnet_analyzer_diagnostic.category-Security.severity = error
+
+# Specific Critical Security Rules (Roslyn)
+# CA2100: Review SQL queries for security vulnerabilities
+dotnet_diagnostic.CA2100.severity = error
+
+# CA5350 & CA5351: Do Not Use Weak/Broken Cryptographic Algorithms (MD5, SHA1, DES)
+dotnet_diagnostic.CA5350.severity = error
+dotnet_diagnostic.CA5351.severity = error
+
+# CA5359: Do Not Disable Certificate Validation
+dotnet_diagnostic.CA5359.severity = error
+
+# CA5364: Do Not Use Deprecated Security Protocols
+dotnet_diagnostic.CA5364.severity = error

@@ -10,6 +10,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using Serilog;
 using Serilog.Events;
+using System.Globalization;
 
 // 1. Configure Serilog Bootstrap Logger for early startup tracking
 Log.Logger = new LoggerConfiguration()
@@ -17,8 +18,8 @@ Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
     .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
     .Enrich.FromLogContext()
-    .WriteTo.Console()
-    .WriteTo.File("Logs/fintech-log-.txt", rollingInterval: RollingInterval.Day)
+    .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)
+    .WriteTo.File("Logs/fintech-log-.txt", rollingInterval: RollingInterval.Day, formatProvider: CultureInfo.InvariantCulture)
     .CreateLogger();
 
 try
