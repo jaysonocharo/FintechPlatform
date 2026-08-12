@@ -4,7 +4,7 @@ using FluentValidation;
 
 namespace FintechBackend.Exceptions;
 
-public class GlobalExceptionHandler : IExceptionHandler
+public partial class GlobalExceptionHandler : IExceptionHandler
 {
     private readonly ILogger<GlobalExceptionHandler> _logger;
 
@@ -13,12 +13,17 @@ public class GlobalExceptionHandler : IExceptionHandler
         _logger = logger;
     }
 
+    [LoggerMessage(
+            EventId = 1,
+            Level = LogLevel.Error,
+            Message = "An unhandled exception occurred: {Message}")]
+    private partial void LogUnhandledException(Exception exception, string message);
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
         Exception exception,
         CancellationToken cancellationToken)
     {
-        _logger.LogError(exception, "An unhandled exception occurred: {Message}", exception.Message);
+        LogUnhandledException(exception, exception.Message);
 
         var problemDetails = exception switch
         {
