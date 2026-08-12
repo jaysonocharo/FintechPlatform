@@ -7,9 +7,26 @@ on: # Defines when this pipeline automatically triggers
     branches: [ "main", "develop" ]
 
 jobs:
+
+  secret-scan:
+    name: Secret Detection using Gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Full history required for gitleaks to scan past commits
+
+      - name: Gitleaks Secret Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build-test-audit:
-    name: Build, Test & Supply Chain Security
+    name: Build, CodeQL SAST & Supply Chain Security Audit
     runs-on: ubuntu-latest # Allocates a fresh Linux virtual machine hosted by GitHub
+    permissions:
+      security-events: write # Allows CodeQL to post security alerts to GitHub Security tab
 
     steps:
       - name: Checkout Code
@@ -20,12 +37,19 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Initialize CodeQL for SAST
+        uses: github/codeql-action/init@v3
+        with:
+          languages: 'csharp'
+
       - name: Restore Dependencies # Resolves and downloads NuGet packages declared in your .csproj
         run: dotnet restore FintechBackend/FintechBackend.csproj 
 
       - name: Build Backend Solution # Compiles the project in Release mode without re-restoring
         run: dotnet build FintechBackend/FintechBackend.csproj --configuration Release --no-restore
 
+      - name: Perform CodeQL Security Analysis
+        uses: github/codeql-action/analyze@v3
       # - name: Run Unit & Integration Tests # Executes automated tests and validates assertions
       #   run: dotnet test --configuration Release --no-build --verbosity normal
 
