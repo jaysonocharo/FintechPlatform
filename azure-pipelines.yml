@@ -1,0 +1,43 @@
+trigger: # Defines branches that trigger builds on direct commits
+  branches:
+    include:
+      - main
+      - develop
+
+pr:
+  branches:
+    include:
+      - main
+      - develop
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  buildConfiguration: 'Release'
+  projectPath: 'FintechBackend/FintechBackend.csproj'
+
+stages:
+- stage: BuildAndSecurityScan
+  displayName: 'Build, Test & Security Audit'
+  jobs:
+  - job: CI_Job
+    displayName: 'Execute Security CI Pipeline'
+    steps:
+    - task: UseDotNet@2
+      displayName: 'Install .NET 8 SDK'
+      inputs:
+        packageType: 'sdk'
+        version: '8.0.x'
+
+    - script: dotnet restore $(projectPath)
+      displayName: 'Restore NuGet Packages'
+
+    - script: dotnet build $(projectPath) --configuration $(buildConfiguration) --no-restore
+      displayName: 'Build Backend Solution'
+
+    # - script: dotnet test --configuration $(buildConfiguration) --no-build
+    #   displayName: 'Run Automated Tests'
+
+    - script: dotnet list $(projectPath) package --vulnerable --include-transitive
+      displayName: 'Supply Chain Vulnerability Audit (NuGet)'

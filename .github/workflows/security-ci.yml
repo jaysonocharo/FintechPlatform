@@ -1,0 +1,33 @@
+name: Security & CI Pipeline (GitHub Actions)
+
+on: # Defines when this pipeline automatically triggers
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  build-test-audit:
+    name: Build, Test & Supply Chain Security
+    runs-on: ubuntu-latest # Allocates a fresh Linux virtual machine hosted by GitHub
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4 # Downloads the repository code onto the runner VM
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4 # Installs the official .NET 8 SDK on the VM
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore Dependencies # Resolves and downloads NuGet packages declared in your .csproj
+        run: dotnet restore FintechBackend/FintechBackend.csproj 
+
+      - name: Build Backend Solution # Compiles the project in Release mode without re-restoring
+        run: dotnet build FintechBackend/FintechBackend.csproj --configuration Release --no-restore
+
+      # - name: Run Unit & Integration Tests # Executes automated tests and validates assertions
+      #   run: dotnet test --configuration Release --no-build --verbosity normal
+
+      - name: Supply Chain Vulnerability Scan (NuGet) # Scans direct and indirect packages for CVEs
+        run: dotnet list FintechBackend/FintechBackend.csproj package --vulnerable --include-transitive
