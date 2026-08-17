@@ -255,6 +255,11 @@ try
 
     app.Run();
 }
+catch (HostAbortedException)
+{
+    // Required by EF Core design-time tooling to exit cleanly
+    throw;
+}
 catch (Exception ex)
 {
     Log.Fatal(ex, "FintechBackend host terminated unexpectedly!");
