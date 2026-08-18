@@ -6,7 +6,7 @@ services:
     restart: always
     environment:
       - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=Alleged_then7
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
       - MSSQL_PID=Express
     ports:
       - "1433:1433" # Standard SQL Server Port
@@ -33,11 +33,11 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=fintech-db,1433;Database=FintechDb;User Id=sa;Password=Alleged_then7;TrustServerCertificate=True;
-      - JwtSettings__Secret=POW7Wb124v2cGgTpi3Bzx+mVxzz9aTjQNgPdMb8TYhBwiEL58Ml6HkaCXOViv+wVRNHDGaEkTGMPWT1xwWa8Rw==
-      - JwtSettings__Issuer=FintechBackend
-      - JwtSettings__Audience=FintechFrontend
-      - AdminConfig__DefaultEmail=admin@example.com
-      - AdminConfig__DefaultPassword=Pass@word1
+      - JwtSettings__Secret=${JWT_SECRET}
+      - JwtSettings__Issuer=${JWT_ISSUER}
+      - JwtSettings__Audience=${JWT_AUDIENCE}
+      - AdminConfig__DefaultEmail=${ADMIN_DEFAULT_EMAIL}
+      - AdminConfig__DefaultPassword=${ADMIN_DEFAULT_PASSWORD}
     depends_on:
       fintech-db:
         condition: service_healthy
