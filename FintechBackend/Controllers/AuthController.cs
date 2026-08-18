@@ -45,8 +45,9 @@ namespace FintechBackend.Controllers
         {
             // Validate the payload immediately
             await _registerValidator.ValidateAndThrowAsync(dto);
+            var normalizedEmail = dto.Email.ToLowerInvariant();
             // 1. Check if user already exists
-            if (await _context.Users.AnyAsync(u => string.Equals(u.Email, dto.Email, StringComparison.OrdinalIgnoreCase)))
+            if (await _context.Users.AnyAsync(u => EF.Functions.Like(u.Email, normalizedEmail)))
             {
                 return BadRequest("Email address is already in use.");
             }
@@ -78,9 +79,10 @@ namespace FintechBackend.Controllers
 
             var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
             var userAgent = Request.Headers["User-Agent"].ToString();
+            var normalizedEmail = dto.Email.ToLowerInvariant();
 
             // 1. Find user by email
-            var user = await _context.Users.FirstOrDefaultAsync(u => string.Equals(u.Email, dto.Email, StringComparison.OrdinalIgnoreCase));
+            var user = await _context.Users.FirstOrDefaultAsync(u => EF.Functions.Like(u.Email, normalizedEmail));
             if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
             {
                 // Never log dto.Password in Serilog
