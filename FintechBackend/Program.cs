@@ -11,6 +11,8 @@ using Microsoft.AspNetCore.RateLimiting;
 using Serilog;
 using Serilog.Events;
 using System.Globalization;
+using Azure.Identity;
+using System;
 
 // 1. Configure Serilog Bootstrap Logger for early startup tracking
 Log.Logger = new LoggerConfiguration()
@@ -26,6 +28,14 @@ try
 {
     Log.Information("Starting FintechBackend API host...");
     var builder = WebApplication.CreateBuilder(args);
+    
+    // Retrieve Key Vault Name from Environment (set by App Service / Terraform)
+    var keyVaultName = builder.Configuration["KEY_VAULT_NAME"];
+    if (!string.IsNullOrEmpty(keyVaultName))
+    {
+        var keyVaultUri = new Uri($"https://{keyVaultName}.vault.azure.net/");
+        builder.Configuration.AddAzureKeyVault(keyVaultUri, new DefaultAzureCredential());
+    }
 
     builder.Host.UseSerilog();
 
