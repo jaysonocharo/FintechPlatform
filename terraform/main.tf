@@ -1,0 +1,84 @@
+# 1. Resource Group
+resource "azurerm_resource_group" "rg" {
+  name     = var.resource_group_name
+  location = var.location
+}
+
+# 2. Azure Container Registry (ACR)
+resource "azurerm_container_registry" "acr" {
+  name                = "${var.app_name_prefix}acrprod01"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  sku                 = "Basic"
+  admin_enabled       = true
+}
+
+# 3. Azure SQL Server
+resource "azurerm_mssql_server" "sql_server" {
+  name                         = "${var.app_name_prefix}-sqlserver-prod01"
+  resource_group_name          = azurerm_resource_group.rg.name
+  location                     = azurerm_resource_group.rg.location
+  version                      = "12.0"
+  administrator_login          = var.sql_admin_username
+  administrator_login_password = var.sql_admin_password
+  minimum_tls_version          = "1.2"
+}
+
+# 4. Azure SQL Database (Basic Tier for development/students)
+resource "azurerm_mssql_database" "sql_db" {
+  name      = "FintechDb"
+  server_id = azurerm_mssql_server.sql_server.id
+  collation            = "SQL_Latin1_General_CP1_CI_AS"
+  sku_name  = "Basic"
+  storage_account_type = "Local"
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+# 5. SQL Firewall Rule: Allow Azure Services (App Service)
+resource "azurerm_mssql_firewall_rule" "allow_azure_services" {
+  name             = "AllowAllWindowsAzureIps"
+  server_id        = azurerm_mssql_server.sql_server.id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "0.0.0.0"
+}
+
+# 6. Linux App Service Plan (Free/Basic tier: B1)
+resource "azurerm_service_plan" "asp" {
+  name                = "${var.app_name_prefix}-asp-prod"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  os_type             = "Linux"
+  sku_name            = "B1"
+}
+
+# 7. Linux Web App for Containers
+resource "azurerm_linux_web_app" "app" {
+  name                = "${var.app_name_prefix}-api-prod01"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  service_plan_id     = azurerm_service_plan.asp.id
+
+  site_config {
+    always_on = true
+    application_stack {
+      docker_image_name   = "fintechbackend:latest"
+      docker_registry_url = "https://${azurerm_container_registry.acr.login_server}"
+      docker_registry_username = azurerm_container_registry.acr.admin_username
+      docker_registry_password = azurerm_container_registry.acr.admin_password
+    }
+  }
+
+  app_settings = {
+    "WEBSITES_PORT"                 = "8080"
+    "ASPNETCORE_ENVIRONMENT"        = "Production"
+    "ConnectionStrings__DefaultConnection" = "Server=tcp:${azurerm_mssql_server.sql_server.fully_qualified_domain_name},1433;Initial Catalog=FintechDb;Persist Security Info=False;User ID=${var.sql_admin_username};Password=${var.sql_admin_password};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+    "AdminConfig__DefaultEmail"           = var.admin_seed_email
+    "AdminConfig__DefaultPassword"           = var.admin_seed_password
+    "JwtSettings__Secret"                             = var.jwt_secret_key
+    "JwtSettings__Issuer"                          = "FintechBackend"
+    "JwtSettings__Audience"                        = "FintechFrontend"  
+  }
+}
