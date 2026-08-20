@@ -28,6 +28,18 @@ variable "sql_admin_password" {
   description = "Azure SQL Server administrator password"
 }
 
+variable "docker_image_name" {
+  type        = string
+  default     = "fintechbackend"
+  description = "Docker image repository name"
+}
+
+variable "docker_image_tag" {
+  type        = string
+  default     = "latest"
+  description = "Docker image tag"
+}
+
 
 variable "jwt_secret_key" {
   type        = string
