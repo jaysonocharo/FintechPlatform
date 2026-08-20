@@ -27,38 +27,22 @@ try
     Log.Information("Starting FintechBackend API host...");
     var builder = WebApplication.CreateBuilder(args);
 
-    // 2. Register Serilog as the primary logging provider for Microsoft's ILogger
     builder.Host.UseSerilog();
 
-    // Abstraction for Secrets: Uses Azure Key Vault in Production, User Secrets in Development
-    if (builder.Environment.IsProduction())
-    {
-        var keyVaultUri = builder.Configuration["KeyVault:VaultUri"];
-        if (!string.IsNullOrEmpty(keyVaultUri))
-        {
-            // Automatically injects Key Vault secrets into IConfiguration when deployed
-            // builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUri), new DefaultAzureCredential());
-        }
-    }
-
-    // Mask Server Identity (Remove 'Server: Kestrel' header)
     builder.WebHost.ConfigureKestrel(serverOptions =>
     {
         serverOptions.AddServerHeader = false;
     });
 
-    // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
     builder.Services.AddDataProtection();
     builder.Services.AddControllers()
         .ConfigureApiBehaviorOptions(options =>
         {
-            options.SuppressModelStateInvalidFilter = true; // Suppress default ModelState response so GlobalExceptionHandler handles it
+            options.SuppressModelStateInvalidFilter = true;
         });
 
-    // 2. Configure .NET 8 Rate Limiting Policies
     builder.Services.AddRateLimiter(options =>
     {
-        // Custom 429 response when rate limit is exceeded
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
         options.OnRejected = async (context, token) =>
         {
@@ -67,7 +51,6 @@ try
                 "{\"error\": \"Too many requests. Please try again later.\"}", cancellationToken: token);
         };
 
-        // Policy A: Strict limit for Auth endpoints (Login / Register) - 5 req/min per IP
         options.AddPolicy("AuthPolicy", httpContext =>
             RateLimitPartition.GetFixedWindowLimiter(
                 partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
@@ -78,7 +61,6 @@ try
                     QueueLimit = 0
                 }));
 
-        // Policy B: General API limit - 60 req/min per IP
         options.AddPolicy("GeneralPolicy", httpContext =>
             RateLimitPartition.GetSlidingWindowLimiter(
                 partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
@@ -94,6 +76,7 @@ try
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(c =>
     {
+        c.SwaggerDoc("v1", new OpenApiInfo { Title = "Fintech API", Version = "v1" });
         c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
         {
             Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
@@ -136,41 +119,39 @@ try
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["JwtSettings:Issuer"], // Updated
-            ValidAudience = builder.Configuration["JwtSettings:Audience"], // Updated
+            ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
+            ValidAudience = builder.Configuration["JwtSettings:Audience"],
             IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
-                System.Text.Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:Secret"]!)) // Updated
+                System.Text.Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:Secret"]!))
         };
     });
 
-    builder.Services.AddScoped<ITokenService, TokenService>(); // Register TokenService
-    builder.Services.AddValidatorsFromAssemblyContaining<CreateTransactionDtoValidator>();// Register FluentValidation validators
-    builder.Services.AddExceptionHandler<GlobalExceptionHandler>(); // Register Global Exception Handling services
+    builder.Services.AddScoped<ITokenService, TokenService>();
+    builder.Services.AddValidatorsFromAssemblyContaining<CreateTransactionDtoValidator>();
+    builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
     builder.Services.AddProblemDetails();
 
-    // 1. Configure HSTS for non-development environments
     if (!builder.Environment.IsDevelopment())
     {
         builder.Services.AddHsts(options =>
         {
             options.Preload = true;
             options.IncludeSubDomains = true;
-            options.MaxAge = TimeSpan.FromDays(365); // Force HTTPS for 1 year
+            options.MaxAge = TimeSpan.FromDays(365);
         });
     }
 
-    // Configure Strict Production-Grade CORS
     builder.Services.AddCors(options =>
     {
         options.AddPolicy("FintechCorsPolicy", policy =>
         {
             policy.WithOrigins(
-                    "http://localhost:5173",  // Local React Vite frontend
-                    "https://localhost:5173"  // Secure local HTTPS React
-                    // Add production React domain here later, e.g. "https://app.fintechkenya.co.ke"
+                    "http://localhost:5173",
+                    "https://localhost:5173",
+                    "https://fintech-app-prod01.azurewebsites.net" // Add production client URL
                 )
-                .WithMethods("GET", "POST", "PUT", "DELETE") // Only the CRUD verbs needed
-                .WithHeaders("Content-Type", "Authorization", "X-Idempotency-Key"); // Allows the standard, safe payload headers only
+                .WithMethods("GET", "POST", "PUT", "DELETE")
+                .WithHeaders("Content-Type", "Authorization", "X-Idempotency-Key");
         });
     });
 
@@ -179,44 +160,33 @@ try
             builder.Configuration.GetConnectionString("DefaultConnection"),
             sqlOptions =>
             {
-                // Retries failed database operations automatically up to 5 times
                 sqlOptions.EnableRetryOnFailure(
                     maxRetryCount: 5,
                     maxRetryDelay: TimeSpan.FromSeconds(10),
                     errorNumbersToAdd: null);
-            })
-            );
+            }));
 
-    builder.Services.AddHttpsRedirection(options =>
-    {
-        options.HttpsPort = 7272; // Sets the HTTPS redirect port explicitly
-    });
+    // Remove the hardcoded HttpsPort 7272: allow standard port handling
+    builder.Services.AddHttpsRedirection(options => { });
 
     var app = builder.Build();
 
-    // Configure the HTTP request pipeline.
-    if (app.Environment.IsDevelopment())
+    // Enable Swagger across all environments so the UI works on Azure
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
     {
-        app.UseSwagger();
-        app.UseSwaggerUI(c =>
-        {
-            c.SwaggerEndpoint("/swagger/v1/swagger.json", "Fintech API V1");
-            c.RoutePrefix = "swagger"; // Serves Swagger at /swagger
-        });
-    }
-    else
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Fintech API v1");
+        c.RoutePrefix = "swagger";
+    });
+
+    if (!app.Environment.IsDevelopment())
     {
         app.UseHsts();
     }
 
-    // Only enforce HTTPS redirection in Staging and Production environments.
-    // In Development, we allow HTTP (localhost:5272) so Swagger and Postman work cleanly.
-    if (!app.Environment.IsDevelopment())
-    {
-        app.UseHttpsRedirection();
-    }
+    // Standard HTTPS redirection without hardcoded port overrides
+    app.UseHttpsRedirection();
 
-    // 3. Security Headers Middleware
     app.Use(async (context, next) =>
     {
         context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
@@ -226,7 +196,6 @@ try
         await next();
     });
 
-    // --- Initialization & Seeding ---
     using (var scope = app.Services.CreateScope())
     {
         var services = scope.ServiceProvider;
@@ -239,14 +208,13 @@ try
         }
         catch (Exception ex)
         {
-            // In a production app, you would log this to Application Insights or Serilog
             Console.WriteLine($"An error occurred while seeding the database: {ex.Message}");
         }
     }
 
     app.UseExceptionHandler();
     app.UseRouting();
-    app.UseSerilogRequestLogging();// Serilog Request Logging (captures HTTP method, route, status code, latency)
+    app.UseSerilogRequestLogging();
     app.UseCors("FintechCorsPolicy");
     app.UseRateLimiter();
     app.UseAuthentication();
@@ -257,7 +225,6 @@ try
 }
 catch (HostAbortedException)
 {
-    // Required by EF Core design-time tooling to exit cleanly
     throw;
 }
 catch (Exception ex)
@@ -268,5 +235,3 @@ finally
 {
     Log.CloseAndFlush();
 }
-
-
