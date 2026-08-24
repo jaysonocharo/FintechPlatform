@@ -1,0 +1,4 @@
+# Rule ID	Threshold	Action
+10020	IGNORE	# Anti-CSRF Tokens Check (Stateless JWT APIs do not require CSRF cookies)
+10038	IGNORE	# Content Security Policy (CSP) Header Not Set (Applies primarily to browser SPAs, not backend APIs)
+10096	WARN	# Timestamp Disclosure

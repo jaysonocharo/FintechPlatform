@@ -1,0 +1,49 @@
+name: Security - DAST Baseline Scan
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'FintechBackend/**'
+      - '.github/workflows/dast-scan.yml'
+
+jobs:
+  dast_baseline_scan:
+    name: OWASP ZAP Baseline Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Run OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          # Targeting the staging App Service URL or active endpoint
+          target: 'https://fintech-api-prod01.azurewebsites.net'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a -j'
+          issue_title: 'DAST Security Alert: Baseline Vulnerability Detected'
+          fail_action: true # Fails the pipeline if HIGH or MEDIUM severity vulnerabilities are detected
+
+      - name: Upload Scan Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-baseline-report
+          path: |
+            report_html.html
+            report_json.json
+            report_md.md
+
+      # For a targeted scan that crawls every declared route in the Swagger definition rather than spidering HTML pages
+      - name: Run OWASP ZAP API Scan
+        uses: zaproxy/action-api-scan@v0.9.0
+        with:
+          # target: 'https://fintech-api-prod01.azurewebsites.net/swagger/v1/swagger.json'
+          target: 'http://localhost:5272'
+          format: openapi
+          rules_file_name: '.zap/rules.tsv'
+          fail_action: true
