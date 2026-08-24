@@ -15,6 +15,9 @@ jobs:
   dast_scan:
     name: Build, Run & Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write # Grants permission to create alert issues if findings exist
 
     steps:
       - name: Checkout Code
