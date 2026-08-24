@@ -1,0 +1,50 @@
+name: CI - Local DAST Scan
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  dast_scan:
+    name: Build, Run & Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Create Mock .env for CI
+        run: |
+          echo "MSSQL_SA_PASSWORD=REDACTED_PASSWORD" >> .env
+          echo "DB_CONNECTION_STRING=Server=fintech-db;Database=FintechDb;User Id=sa;Password=REDACTED_PASSWORD;TrustServerCertificate=True;" >> .env
+          echo "JWT_SECRET=REDACTED_JWT_KEY" >> .env
+          echo "JWT_ISSUER=FintechPlatform" >> .env
+          echo "JWT_AUDIENCE=FintechPlatformClients" >> .env
+          echo "ADMIN_DEFAULT_EMAIL=admin@example.com" >> .env
+          echo "ADMIN_DEFAULT_PASSWORD=REDACTED_PASSWORD" >> .env
+
+      - name: Start Services via Docker Compose
+        run: |
+          docker compose up -d --build
+          # Wait for API health and Swagger JSON availability
+          timeout 60s bash -c 'until curl --fail http://localhost:5272/swagger/v1/swagger.json; do sleep 3; done'
+
+      - name: Run OWASP ZAP API Scan
+        uses: zaproxy/action-api-scan@v0.9.0
+        with:
+          target: 'http://localhost:5272/swagger/v1/swagger.json'
+          format: openapi
+          cmd_options: '-a'
+          fail_action: false
+
+      - name: Upload ZAP Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-ci-report
+          path: |
+            report_html.html
+            report_json.json
+            report_md.md
