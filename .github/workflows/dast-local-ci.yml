@@ -23,15 +23,19 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Create Mock .env for CI
+      - name: Generate Ephemeral Secrets & Create Mock .env
         run: |
-          echo "MSSQL_SA_PASSWORD=REDACTED_PASSWORD" >> .env
-          echo "DB_CONNECTION_STRING=Server=fintech-db;Database=FintechDb;User Id=sa;Password=REDACTED_PASSWORD;TrustServerCertificate=True;" >> .env
-          echo "JWT_SECRET=REDACTED_JWT_KEY" >> .env
+          RANDOM_DB_PASS="Db_$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9')!"
+          RANDOM_JWT_KEY="$(openssl rand -hex 32)"
+          RANDOM_ADMIN_PASS="Admin_$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9')!"
+
+          echo "MSSQL_SA_PASSWORD=${RANDOM_DB_PASS}" >> .env
+          echo "DB_CONNECTION_STRING=Server=fintech-db;Database=FintechDb;User Id=sa;Password=${RANDOM_DB_PASS};TrustServerCertificate=True;" >> .env
+          echo "JWT_SECRET=${RANDOM_JWT_KEY}" >> .env
           echo "JWT_ISSUER=FintechPlatform" >> .env
           echo "JWT_AUDIENCE=FintechPlatformClients" >> .env
           echo "ADMIN_DEFAULT_EMAIL=admin@example.com" >> .env
-          echo "ADMIN_DEFAULT_PASSWORD=REDACTED_PASSWORD" >> .env
+          echo "ADMIN_DEFAULT_PASSWORD=${RANDOM_ADMIN_PASS}" >> .env
 
       - name: Start Services via Docker Compose
         run: |
