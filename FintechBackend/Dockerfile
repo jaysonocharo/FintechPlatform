@@ -18,6 +18,9 @@ RUN dotnet publish "FintechBackend.csproj" -c Release -o /app/publish /p:UseAppH
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
+# Create directory and set ownership to 'app' user before dropping root privileges
+RUN mkdir -p /home/app/.aspnet/DataProtection-Keys && chown -R app:app /home/app/.aspnet
+
 # Switch to the non-root 'app' user provided natively in .NET 8 base images
 USER app
 

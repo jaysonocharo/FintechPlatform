@@ -47,6 +47,14 @@ resource "azurerm_mssql_firewall_rule" "allow_azure_services" {
   end_ip_address   = "0.0.0.0"
 }
 
+# SQL Firewall: Allow Local Developer Machine
+resource "azurerm_mssql_firewall_rule" "allow_client_ip" {
+  name             = "AllowClientIP"
+  server_id        = azurerm_mssql_server.sql_server.id
+  start_ip_address = "197.232.247.107"
+  end_ip_address   = "197.232.247.107"
+}
+
 # 5. Azure Key Vault
 resource "azurerm_key_vault" "kv" {
   name                       = "kv-fintech-prod01"
@@ -78,6 +86,14 @@ resource "azurerm_key_vault_secret" "db_connection" {
 resource "azurerm_key_vault_secret" "jwt_secret" {
   name         = "JwtSettings--Secret"
   value        = var.jwt_secret_key
+  key_vault_id = azurerm_key_vault.kv.id
+
+  depends_on = [azurerm_role_assignment.kv_admin]
+}
+
+resource "azurerm_key_vault_secret" "admin_email" {
+  name         = "AdminConfig--DefaultEmail"
+  value        = var.admin_seed_email
   key_vault_id = azurerm_key_vault.kv.id
 
   depends_on = [azurerm_role_assignment.kv_admin]
@@ -142,3 +158,4 @@ resource "azurerm_role_assignment" "app_kv_secrets_user" {
   role_definition_name = "Key Vault Secrets User"
   principal_id         = azurerm_linux_web_app.app.identity[0].principal_id
 }
+

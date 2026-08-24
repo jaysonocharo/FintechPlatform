@@ -13,6 +13,7 @@ using Serilog.Events;
 using System.Globalization;
 using Azure.Identity;
 using System;
+using FintechBackend.Filters;
 
 // 1. Configure Serilog Bootstrap Logger for early startup tracking
 Log.Logger = new LoggerConfiguration()
@@ -87,6 +88,7 @@ try
     builder.Services.AddSwaggerGen(c =>
     {
         c.SwaggerDoc("v1", new OpenApiInfo { Title = "Fintech API", Version = "v1" });
+        c.OperationFilter<IdempotencyHeaderFilter>();
         c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
         {
             Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",

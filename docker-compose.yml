@@ -38,6 +38,15 @@ services:
       - JwtSettings__Audience=${JWT_AUDIENCE}
       - AdminConfig__DefaultEmail=${ADMIN_DEFAULT_EMAIL}
       - AdminConfig__DefaultPassword=${ADMIN_DEFAULT_PASSWORD}
+    volumes:
+      - dp_keys:/home/app/.aspnet/DataProtection-Keys
+    develop:
+          watch:
+            - action: rebuild
+              path: ./FintechBackend
+              ignore:
+                - bin/
+                - obj/
     depends_on:
       fintech-db:
         condition: service_healthy
