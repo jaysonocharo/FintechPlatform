@@ -14,6 +14,11 @@ using System.Globalization;
 using Azure.Identity;
 using System;
 using FintechBackend.Filters;
+using Microsoft.AspNetCore.HttpOverrides;
+using FintechBackend.Middleware;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using System.Text.Json;
 
 // 1. Configure Serilog Bootstrap Logger for early startup tracking
 Log.Logger = new LoggerConfiguration()
@@ -38,12 +43,45 @@ try
         builder.Configuration.AddAzureKeyVault(keyVaultUri, new DefaultAzureCredential());
     }
 
-    builder.Host.UseSerilog();
+    builder.Host.UseSerilog((context, services, configuration)=>
+    {
+        configuration
+            .ReadFrom.Configuration(context.Configuration)
+            .Enrich.FromLogContext()
+            .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)
+            .WriteTo.File("Logs/fintech-log-.txt", rollingInterval: RollingInterval.Day, formatProvider: CultureInfo.InvariantCulture);
+
+        var appInsightsConn = context.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+            if (!string.IsNullOrWhiteSpace(appInsightsConn))
+            {
+                var telemetryConfig = services.GetRequiredService<Microsoft.ApplicationInsights.Extensibility.TelemetryConfiguration>();
+                configuration.WriteTo.ApplicationInsights(telemetryConfig, TelemetryConverter.Traces);
+            }
+    });
 
     builder.WebHost.ConfigureKestrel(serverOptions =>
     {
         serverOptions.AddServerHeader = false;
     });
+
+// Application Insights Telemetry (Only register if connection string is configured)
+    var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+    if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
+    {
+        builder.Services.AddApplicationInsightsTelemetry(options =>
+        {
+            options.ConnectionString = appInsightsConnectionString;
+        });
+    }
+
+// Health Checks (Liveness + SQL Readiness Check)
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => HealthCheckResult.Healthy("API is running."), tags: HealthTags.LiveTags)
+    .AddSqlServer(
+        connectionString: builder.Configuration.GetConnectionString("DefaultConnection")!,
+        name: "sqlserver",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: HealthTags.ReadyTags);
 
     builder.Services.AddDataProtection();
     builder.Services.AddControllers()
@@ -163,7 +201,7 @@ try
                     "https://fintech-app-prod01.azurewebsites.net" // Add production client URL
                 )
                 .WithMethods("GET", "POST", "PUT", "DELETE")
-                .WithHeaders("Content-Type", "Authorization", "X-Idempotency-Key");
+                .WithHeaders("Content-Type", "Authorization", "X-Idempotency-Key", "X-Correlation-ID");
         });
     });
 
@@ -180,6 +218,13 @@ try
 
     // Remove the hardcoded HttpsPort 7272: allow standard port handling
     builder.Services.AddHttpsRedirection(options => { });
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // Clear default networks/proxies so headers from localhost/test runners are trusted
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
     var app = builder.Build();
 
@@ -226,11 +271,30 @@ try
 
     app.UseExceptionHandler();
     app.UseRouting();
+
+    // Correlation ID Middleware
+    app.UseMiddleware<CorrelationIdMiddleware>();
+
+    app.UseForwardedHeaders();
     app.UseSerilogRequestLogging();
     app.UseCors("FintechCorsPolicy");
     app.UseRateLimiter();
     app.UseAuthentication();
     app.UseAuthorization();
+
+    // Health Check Endpoints
+    app.MapHealthChecks("/health/live", new HealthCheckOptions
+    {
+        Predicate = check => check.Tags.Contains("live"),
+        ResponseWriter = WriteHealthResponse
+    });
+
+    app.MapHealthChecks("/health/ready", new HealthCheckOptions
+    {
+        Predicate = check => check.Tags.Contains("ready"),
+        ResponseWriter = WriteHealthResponse
+    });
+
     app.MapControllers();
 
     app.Run();
@@ -246,4 +310,30 @@ catch (Exception ex)
 finally
 {
     Log.CloseAndFlush();
+}
+
+static Task WriteHealthResponse(HttpContext context, HealthReport report)
+{
+    context.Response.ContentType = "application/json";
+
+    var response = new
+    {
+        status = report.Status.ToString(),
+        checks = report.Entries.Select(e => new
+        {
+            component = e.Key,
+            status = e.Value.Status.ToString(),
+            description = e.Value.Description,
+            duration = e.Value.Duration.ToString()
+        }),
+        totalDuration = report.TotalDuration
+    };
+
+    return context.Response.WriteAsync(JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true }));
+}
+
+file static class HealthTags
+{
+    public static readonly string[] LiveTags = ["live"];
+    public static readonly string[] ReadyTags = ["ready"];
 }
